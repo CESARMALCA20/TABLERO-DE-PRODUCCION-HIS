@@ -745,9 +745,10 @@ m2.metric("🩺 Total Atenciones", f"{total_atenciones:,.0f}")
 # ============================================================
 st.markdown("""
     <div style="text-align: right; margin-top: 40px; color: #555; font-size: 14px;">
-        Area de Informatica y Estadistica - Red San Pablo 2025.
+        Área de Informatica y Estadistica - Red San Pablo 2025.
     </div>
 """, unsafe_allow_html=True)
+
 
 
 
