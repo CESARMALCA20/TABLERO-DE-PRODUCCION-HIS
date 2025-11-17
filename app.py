@@ -39,7 +39,7 @@ else:
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Red San Pablo - HIS", 
+    page_title="Tablero HIS - Red San Pablo", 
     page_icon=logo_src,  
     layout="wide"
 )
@@ -110,14 +110,14 @@ if "mes" in df.columns:
 
 
 # ============================================================
-# 🎨 ESTILOS CSS PROFESIONALES (SOLUCIÓN DEFINITIVA DE FIXED)
+# 🎨 ESTILOS CSS PROFESIONALES (SOLUCIÓN DEFINITIVA Y RESPONSIVA)
 # ============================================================
 st.markdown("""
 <style>
 
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
 
-/* 🎯 SOLUCIÓN FINAL: Eliminamos el padding superior que Streamlit pone por defecto para la barra nativa (que está oculta) */
+/* 1. Resetear el padding principal para eliminar el espacio nativo de Streamlit */
 [data-testid="stAppViewContainer"] > div:first-child {
     padding-top: 0px !important; 
 }
@@ -154,23 +154,83 @@ html, body, [data-testid="stAppViewContainer"] {
     right: 0;
     width: 100%; 
     z-index: 99999; 
+    /* Altura por defecto en Desktop */
+    padding: 10px 40px; 
+    align-items: center;
 }
 
-.header-container p {
-    color: white !important;
-    text-shadow: 1px 1px 5px rgba(0,0,0,0.4);
-}
-
-/* 🎯 AJUSTE CRÍTICO (Para que el primer contenido visible se mueva hacia arriba) */
-/* El bloque de la fuente de datos (primer contenido que escribiste) */
+/* 🎯 Ajuste del margen para el primer contenido (Desktop) */
 [data-testid="stVerticalBlock"]:nth-child(2) { 
-    margin-top: 120px !important; /* Ahora el margen es POSITIVO para que baje bajo el header fijo */
+    margin-top: 120px !important; /* Margen positivo para empezar debajo del header */
     padding-top: 0px !important; 
 }
 
+/* -------------------------------------------------
+    RESPONSIVO: MEDIA QUERY PARA MÓVILES (< 768px)
+------------------------------------------------- */
+@media (max-width: 768px) {
+    
+    /* 1. Ajuste del encabezado para móviles: menos padding, logo más pequeño y centrado */
+    .header-container {
+        padding: 5px 15px !important;
+        /* Forzar apilamiento de logo y texto en móvil */
+        flex-direction: column !important; 
+        align-items: flex-start !important; 
+    }
+    
+    /* 2. Reducir tamaño del logo */
+    .header-container img {
+        width: 80px !important; 
+        height: 80px !important; 
+        margin-bottom: 5px; /* Espacio entre logo y texto */
+    }
+
+    /* 3. Reducir tamaño del texto principal */
+    .header-container p:nth-child(1) {
+        font-size: 20px !important; 
+        line-height: 1.2 !important;
+    }
+    
+    /* 4. Reducir tamaño del subtítulo */
+    .header-container p:nth-child(2) {
+        font-size: 12px !important;
+        margin-bottom: 5px;
+    }
+
+    /* 5. Ajuste del margen para el primer contenido (Móvil) */
+    /* El header fijo es más pequeño en móvil (aprox 100px) */
+    [data-testid="stVerticalBlock"]:nth-child(2) { 
+        margin-top: 100px !important; 
+    }
+    
+    /* 6. Ajustar fuente y fecha */
+    div:has(> span:contains("Fuente de Datos")) {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        font-size: 14px !important;
+        padding-top: 5px !important;
+        padding-bottom: 5px !important;
+    }
+    div:has(> span:contains("Fuente de Datos")) > span {
+        margin-bottom: 5px;
+    }
+
+    /* 7. Reducir espacio en métricas */
+    .stMetric {
+        padding: 8px !important;
+        margin-bottom: 10px;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 20px !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 14px !important;
+    }
+}
 /* ------------------------------------------------- */
 
-/* Métricas */
+
+/* Otros estilos */
 .stMetric {
     background: white;
     border-radius: 15px;
@@ -189,9 +249,7 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #444;
 }
 
-/* -------------------------------------------------
-    OCULTAR BOTÓN DE EXPANDER/CHECKBOX EN FILTROS
-------------------------------------------------- */
+/* Ocultar botón de Expander en Filtros */
 [data-testid="stExpander"] button {
     display: none !important;
     visibility: hidden !important; 
@@ -203,36 +261,7 @@ html, body, [data-testid="stAppViewContainer"] {
     padding-right: 0px !important;
 }
 
-/* -------------------------------------------------
-    ESTILOS PARA TABLA st.dataframe
-------------------------------------------------- */
-[data-testid="stStyledDataFrame"] * {
-    background-color: unset !important;
-    color: unset !important;
-}
-
-[data-testid="stStyledDataFrame"] thead th {
-    background-color: #003c8f !important;
-    color: white !important;
-    font-weight: 700 !important; 
-    text-align: center !important;
-}
-
-div.stDataFrame > div > div > div:nth-child(1) > div > div > div:nth-child(2) {
-    text-align: left !important;
-}
-
-/* -------------------------------------------------
-    HOVER INDIVIDUAL DEL FILTRO (BLOQUE EXTERNO)
-------------------------------------------------- */
-[data-testid="stExpanderDetails"] > div > div > div {
-    padding: 0 10px 0 10px;
-    background-color: transparent !important;
-    box-shadow: none !important;
-    transform: none !important;
-    border: none !important;
-}
-
+/* Estilos de Hover en Filtros */
 [data-testid="stExpanderDetails"] [data-testid="stVerticalBlock"] {
     margin: 8px 0 !important; 
     background-color: white; 
@@ -249,78 +278,26 @@ div.stDataFrame > div > div > div:nth-child(1) > div > div > div:nth-child(2) {
     border: 1px solid #0056d6; 
 }
 
-/* -------------------------------------------------
-    HOVER AZUL SUAVE EN FILAS DE LA TABLA
-------------------------------------------------- */
+/* Estilos para Tabla y Slider (mantienen el look) */
+[data-testid="stStyledDataFrame"] thead th {
+    background-color: #003c8f !important;
+    color: white !important;
+    font-weight: 700 !important; 
+    text-align: center !important;
+}
+
 [data-testid="stStyledDataFrame"] tbody tr:hover {
     background-color: #e6f0ff !important; 
     color: #003c8f !important; 
     cursor: pointer;
 }
 
-[data-testid="stStyledDataFrame"] tbody tr:hover td {
-    background-color: transparent !important; 
-    color: #003c8f !important;
-}
-
-[data-testid="stStyledDataFrame"] tbody tr:hover th {
-    background-color: #c0d8f7 !important; 
-    color: #003c8f !important;
-}
-
-/* -------------------------------------------------
-    HOVER AZUL CLARO EN LAS OPCIONES DEL DROPDOWN
-------------------------------------------------- */
-div[data-baseweb="popover"] ul li[role="option"]:hover {
-    background-color: #e6f0ff !important; 
-    color: #003c8f !important; 
-}
-div[data-baseweb="popover"] ul li[role="option"][aria-selected="true"] {
-    background-color: #0056d6 !important; 
-    color: white !important;
-}
-div[data-baseweb="popover"] ul {
-    background-color: white !important; 
-}
-
-/* -------------------------------------------------
-    ESTILO ESPECÍFICO DEL SLIDER (Fucsia Agresivo)
-------------------------------------------------- */
-
-/* Título */
-div[data-testid="stSlider"] label p {
-    font-size: 18px !important; 
-    font-weight: 700 !important; 
-    color: #333 !important;
-}
-
-/* Valor (ej: 20) */
-div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(1) {
-    color: #E83E8C !important; 
-    font-size: 24px !important;
-    font-weight: 700 !important;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-}
-
-/* Pista (Track) - Color Fucsia */
 div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(2) > div {
     background-color: #E83E8C !important; 
-    height: 8px; 
-    border-radius: 4px; 
 }
 
-/* Pulgar (Thumb) - Círculo */
 div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(2) > div > div {
     background-color: #C03070 !important; 
-    border: 3px solid white !important;
-    box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    width: 18px; 
-    height: 18px; 
-}
-
-/* Hover */
-div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(2) > div > div:hover {
-    box-shadow: 0 0 10px rgba(232, 62, 140, 0.8); 
 }
 /* ------------------------------------------------- */
 
@@ -350,9 +327,7 @@ st.markdown(f"""
 <div class="header-container" style="
     width:100%;
     background: linear-gradient(90deg, #003c8f 0%, #0056d6 100%);
-    padding:10px 40px; 
     display:flex;
-    align-items:center;
     gap:20px;
     color:white;
     margin-bottom:0px; 
@@ -390,7 +365,6 @@ st.markdown(f"""
 fecha_actualizacion = obtener_fecha_modificacion()
 
 # 👉 Contenedor de Fecha y Fuente
-# Este bloque es el [data-testid="stVerticalBlock"]:nth-child(2)
 st.markdown(f"""
     <div style="
         display: flex;
@@ -416,6 +390,7 @@ st.markdown(f"""
 # 🔍 FILTROS (EXPANDER FIJO CON HOVER)
 # ============================================================
 with st.expander("⚙️ **FILTROS DE BÚSQUEDA**", expanded=True):
+    # Streamlit se encarga de apilar estas columnas en móvil
     filtro_col1, filtro_col2, filtro_col3, filtro_col4, filtro_col5 = st.columns(5)
 
     with filtro_col1:
@@ -461,6 +436,7 @@ with st.expander("⚙️ **FILTROS DE BÚSQUEDA**", expanded=True):
 # ============================================================
 st.markdown("---") 
 
+# Se apilan en móvil
 col_params_izq, col_params_der = st.columns([1, 1])
 
 with col_params_izq:
@@ -534,6 +510,7 @@ show_days_table = st.checkbox("📅 **Mostrar columnas de producción diaria**",
 
 display_styled_divider()
 
+# Se apilan en móvil
 col_izq, col_der = st.columns([3, 2])
 
 # ============================================================
@@ -611,6 +588,7 @@ with col_izq:
         })
     )
 
+    # st.dataframe es responsivo, se ajustará automáticamente
     st.dataframe(styled, use_container_width=True, height=520) 
 
 # ============================================================
@@ -623,12 +601,13 @@ with col_der:
 
     if att_column_name in resumen_top.columns:
         
+        # El gráfico Altair también es responsivo por defecto
         bars = (
             alt.Chart(resumen_top)
             .mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5)
             .encode(
                 x=alt.X(f"{att_column_name}:Q", title="Total de Atenciones"),
-                y=alt.Y("Profesional:N", sort="-x"),
+                y=alt.Y("Profesional:N", sort="-x", title=""), # Reducir título en móvil
                 color=alt.Color("Establecimiento:N", legend=alt.Legend(title="Establecimiento")),
                 tooltip=["Establecimiento", "Especialidad", "Profesional", "Atendidos", alt.Tooltip(att_column_name, title="Atenciones", format=',.0f')]
             )
@@ -756,6 +735,7 @@ sort_col_name = "Atenciones" if "Atenciones" in resumen.columns else "Suma_Dias"
 total_atenciones = resumen[sort_col_name].sum() if sort_col_name in resumen.columns else 0
 
 
+# Se apilan en móvil
 m1, m2 = st.columns(2)
 m1.metric("👥 Total Atendidos", f"{total_atendidos:,.0f}") 
 m2.metric("🩺 Total Atenciones", f"{total_atenciones:,.0f}")
@@ -768,7 +748,6 @@ st.markdown("""
         Elaborado por **César Malca Cabanillas** - Red San Pablo 2025.
     </div>
 """, unsafe_allow_html=True)
-
 
 
 
