@@ -39,7 +39,7 @@ else:
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Tablero HIS - Red San Pablo", 
+    page_title="Red San Pablo - HIS", 
     page_icon=logo_src,  
     layout="wide"
 )
@@ -768,6 +768,7 @@ st.markdown("""
         Elaborado por **César Malca Cabanillas** - Red San Pablo 2025.
     </div>
 """, unsafe_allow_html=True)
+
 
 
 
