@@ -8,11 +8,9 @@ from datetime import datetime
 import os 
 
 # ============================================================
-# 🔧 CONFIGURACIÓN GENERAL
+# 🔧 CONFIGURACIÓN GENERAL Y CARGA DE LOGO
 # ============================================================
-st.set_page_config(page_title="Tablero HIS - Red San Pablo", layout="wide")
 
-# (Se mantiene la función load_logo_base64 y la carga del logo)
 def load_logo_base64(file_path):
     """Convierte el archivo de imagen a string Base64."""
     try:
@@ -22,66 +20,155 @@ def load_logo_base64(file_path):
     
     logo_path = base_path / file_path
     
-    # Intenta cargar el logo localmente
-    logo_path = base_path / file_path
-    
     try:
         with open(logo_path, "rb") as f:
             data = f.read()
         return base64.b64encode(data).decode()
     except FileNotFoundError:
-        # st.warning(f"⚠️ Archivo de logo no encontrado: {logo_path}. Usando marcador de posición.")
         return None
     except Exception as e:
-        # st.error(f"⚠️ Error al cargar el logo: {e}")
         return None
 
-# Asegúrate de tener 'logo_sanpablo.png' en el mismo directorio o usa un marcador
+# Asegúrate de tener el archivo "logo_sanpablo.png" en la misma carpeta que tu script
 logo_b64 = load_logo_base64("logo_sanpablo.png") 
 
 if logo_b64:
     logo_src = f"data:image/png;base64,{logo_b64}"
 else:
-    # URL de marcador de posición (si no se encuentra el logo local)
-    logo_src = "https://i.imgur.com/5RHR6Ku.png" 
+    logo_src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADg1PWnAAAAAXNSR0IArs4c6QAAAXRJREFUeJzt3LFOwzAUBeFvE4kFioK3oV24cAE8A4P0JcQf4AQ8AW8gY2CgICAgICAgICAgICAg+K1c/70lSZIe3D5/l98/FwAAAACA1V9n39X607Pfb9/Nn5e3b97b1+f7fUe630z9A4H5f+gDAvP/UC+Yn7c/k5e3v0D2H0j9A4H5f6iFm3y7O/t7/R/c4D/vF/v7jVdD/g/1vF/i9p8H4v+hF25x9+Xl7b+w0lP89o3v9/uOdv8z9e4/vF/s73cO/w+7cIu7vy/n1/f3n6Tif/D5eXn/m/9n7d1/tC4tF078Hl8vL+/8XzG4y92Xl7f/gZ/t2r93/jV19uL29vs3n/f7jnb9L4/G/2f9H7duf7w/f79/b9/e77P9G/f2f9+8BBAAAAICrF16Y66yTfG/vAAAAAElFTkSuQmCC" 
+
+# Configuración de la página
+st.set_page_config(
+    page_title="Tablero HIS - Red San Pablo", 
+    page_icon=logo_src,  
+    layout="wide"
+)
+
+# Mapeo manual para asegurar los meses en español (usado en la función de fecha)
+meses_espanol = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+    7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+}
+
+@st.cache_data
+def obtener_fecha_modificacion(path="CONSOLIDADO.xlsx"):
+    """Obtiene la fecha y hora de la última modificación del archivo de datos con meses en español."""
+    try:
+        timestamp = os.path.getmtime(path)
+        dt_object = datetime.fromtimestamp(timestamp)
+        
+        dia = dt_object.day
+        mes_num = dt_object.month
+        anio = dt_object.year
+        tiempo = dt_object.strftime("%H:%M") 
+        
+        mes_nombre = meses_espanol.get(mes_num, "Mes Desconocido")
+        
+        return f"{dia} de {mes_nombre} de {anio} - {tiempo} Hrs."
+        
+    except FileNotFoundError:
+        now = datetime.now()
+        mes_nombre = meses_espanol.get(now.month, "Mes Desconocido")
+        return f"{now.day} de {mes_nombre} de {now.year} - {now.strftime('%H:%M')} Hrs. (Archivo no encontrado)"
+
+
+@st.cache_data
+def cargar_datos(path="CONSOLIDADO.xlsx"):
+    """Carga los datos del archivo Excel o usa datos de ejemplo."""
+    try:
+        df = pd.read_excel(path, engine="openpyxl")
+        df.columns = df.columns.map(lambda c: str(c).strip())
+        df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+        return df
+    except FileNotFoundError:
+        st.warning(f"⚠️ **Advertencia:** Archivo de datos no encontrado. Usando datos de ejemplo.")
+        # Datos de ejemplo para que la aplicación corra
+        data = {
+            "anio": [2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024],
+            "mes": [10, 10, 10, 10, 10, 10, 10, 10, 11, 11],
+            "nombre_establecimiento": ["IPRESS A", "IPRESS B", "IPRESS A", "IPRESS C", "IPRESS B", "IPRESS A", "IPRESS B", "IPRESS C", "IPRESS A", "IPRESS B"],
+            "profesional": ["Cardiología", "Medicina General", "Cardiología", "Ginecología", "Pediatría", "Medicina Interna", "Oftalmología", "Cirugía", "Cardiología", "Medicina General"],
+            "nombres_profesional": ["Dr. Perez", "Lic. García", "Dr. Perez", "Dra. Lopez", "Dr. Soto", "Dra. Rojas", "Lic. Vidal", "Dr. Castro", "Dr. Perez", "Lic. García"],
+            "Total Atenciones": [150, 220, 180, 90, 300, 110, 250, 140, 160, 230],
+            "1": [10, 20, 15, 5, 25, 8, 18, 12, 11, 21], "2": [12, 25, 18, 7, 30, 9, 20, 14, 13, 26], "3": [14, 28, 20, 8, 35, 10, 22, 16, 15, 29],
+            "4": [10, 20, 15, 5, 25, 8, 18, 12, 11, 21], "5": [12, 25, 18, 7, 30, 9, 20, 14, 13, 26], "6": [14, 28, 20, 8, 35, 10, 22, 16, 15, 29]
+        }
+        for i in range(7, 32):
+            data[str(i)] = [max(0, x - 2) for x in data.get(str(i-3), [0] * 10)] if i > 3 and str(i-3) in data else [0] * 10
+        return pd.DataFrame(data)
+
+def detectar_dias_columnas(columns):
+    return sorted([str(c) for c in columns if re.fullmatch(r"0?[1-9]|[12][0-9]|3[01]", str(c))], key=lambda x: int(x))
+
+df = cargar_datos()
+day_cols = detectar_dias_columnas(df.columns)
+fecha_actualizacion = obtener_fecha_modificacion()
+orden_meses = list(meses_espanol.values())
+if "mes" in df.columns:
+    df["mes_nombre"] = df["mes"].map(meses_espanol)
+    df["mes_nombre"] = pd.Categorical(df["mes_nombre"], categories=orden_meses, ordered=True)
+
 
 # ============================================================
-# 🎨 ESTILOS CSS PROFESIONALES (INCLUYE OCULTAR BOTÓN DEL EXPANDER)
+# 🎨 ESTILOS CSS PROFESIONALES (SOLUCIÓN DEFINITIVA DE FIXED)
 # ============================================================
 st.markdown("""
 <style>
 
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
 
+/* 🎯 SOLUCIÓN FINAL: Eliminamos el padding superior que Streamlit pone por defecto para la barra nativa (que está oculta) */
+[data-testid="stAppViewContainer"] > div:first-child {
+    padding-top: 0px !important; 
+}
+
 html, body, [data-testid="stAppViewContainer"] {
     font-family: 'Roboto', sans-serif !important;
     background-color: #f6f8fb;
 }
 
-/* -------------------------------------------------
-    SOBREESCRIBIR VARIABLES DE COLOR PRIMARIO
-    (Fuerza el color Fucsia para el slider y otros acentos)
-------------------------------------------------- */
-
-:root {
-    --primary-color: #E83E8C !important; /* Color Fucsia */
-    --text-color: #E83E8C !important; 
+/* 🛑 OCULTAR BARRA BLANCA Y MENÚS NATIVOS 🛑 */
+[data-testid="stHeader"] {
+    display: none !important;
+}
+[data-testid="stHeader"] > div:last-child { 
+    visibility: hidden;
+    pointer-events: none; 
+}
+.st-emotion-cache-1pxazr7 > header > div:last-child {
+    visibility: hidden;
+    pointer-events: none;
 }
 
-
 /* -------------------------------------------------
-    ESTILO GLOBAL DEL ENCABEZADO
+    ESTILO GLOBAL DEL ENCABEZADO (FIXED)
 ------------------------------------------------- */
 .header-container {
     box-shadow: 0 12px 40px rgba(0,0,0,0.45) !important; 
-    border-radius: 15px !important; 
+    border-radius: 0 !important; 
     font-family: 'Roboto', sans-serif !important;
+    
+    position: fixed !important;
+    top: 0 !important;
+    left: 0;
+    right: 0;
+    width: 100%; 
+    z-index: 99999; 
 }
 
 .header-container p {
     color: white !important;
     text-shadow: 1px 1px 5px rgba(0,0,0,0.4);
 }
+
+/* 🎯 AJUSTE CRÍTICO (Para que el primer contenido visible se mueva hacia arriba) */
+/* El bloque de la fuente de datos (primer contenido que escribiste) */
+[data-testid="stVerticalBlock"]:nth-child(2) { 
+    margin-top: 120px !important; /* Ahora el margen es POSITIVO para que baje bajo el header fijo */
+    padding-top: 0px !important; 
+}
+
+/* ------------------------------------------------- */
 
 /* Métricas */
 .stMetric {
@@ -202,14 +289,14 @@ div[data-baseweb="popover"] ul {
 
 /* Título */
 div[data-testid="stSlider"] label p {
-    font-size: 18px !important; /* TAMAÑO AUMENTADO */
-    font-weight: 700 !important; /* PESO AUMENTADO */
+    font-size: 18px !important; 
+    font-weight: 700 !important; 
     color: #333 !important;
 }
 
 /* Valor (ej: 20) */
 div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(1) {
-    color: #E83E8C !important; /* Fucsia para el texto del valor */
+    color: #E83E8C !important; 
     font-size: 24px !important;
     font-weight: 700 !important;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
@@ -217,14 +304,14 @@ div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(1) {
 
 /* Pista (Track) - Color Fucsia */
 div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(2) > div {
-    background-color: #E83E8C !important; /* Fucsia principal */
+    background-color: #E83E8C !important; 
     height: 8px; 
     border-radius: 4px; 
 }
 
 /* Pulgar (Thumb) - Círculo */
 div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(2) > div > div {
-    background-color: #C03070 !important; /* Tono más oscuro de fucsia para el círculo */
+    background-color: #C03070 !important; 
     border: 3px solid white !important;
     box-shadow: 0 0 5px rgba(0,0,0,0.3);
     width: 18px; 
@@ -233,7 +320,7 @@ div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(2) > div > 
 
 /* Hover */
 div[data-testid="stSlider"] > div > div:nth-child(1) > div:nth-child(2) > div > div:hover {
-    box-shadow: 0 0 10px rgba(232, 62, 140, 0.8); /* Sombra fucsia al hacer hover */
+    box-shadow: 0 0 10px rgba(232, 62, 140, 0.8); 
 }
 /* ------------------------------------------------- */
 
@@ -248,8 +335,8 @@ def display_styled_divider():
     """Muestra un divisor horizontal con gradiente azul personalizado."""
     st.markdown("""
     <div style="
-        height: 2px; /* Altura de la línea */
-        background: linear-gradient(90deg, #0056d6 0%, #003c8f 70%, #f6f8fb 100%); /* Gradiente azul a transparente */
+        height: 2px;
+        background: linear-gradient(90deg, #0056d6 0%, #003c8f 70%, #f6f8fb 100%);
         margin-top: 10px;
         margin-bottom: 20px;
         border-radius: 1px;
@@ -257,42 +344,37 @@ def display_styled_divider():
     """, unsafe_allow_html=True)
 
 # ============================================================
-# 🧩 ENCABEZADO
+# 🧩 ENCABEZADO (CON ESTILO FIXED IMPLÍCITO DESDE CSS)
 # ============================================================
 st.markdown(f"""
 <div class="header-container" style="
     width:100%;
-    /* Gradiente sutil y moderno */
     background: linear-gradient(90deg, #003c8f 0%, #0056d6 100%);
-    padding:20px 40px;
+    padding:10px 40px; 
     display:flex;
     align-items:center;
     gap:20px;
     color:white;
-    position: sticky;
-    top: 0;
-    z-index:9999;
-    margin-bottom:20px;
+    margin-bottom:0px; 
 ">
     <img src="{logo_src}" style="
-        width:120px; 
-        height:120px; 
+        width:100px; 
+        height:100px; 
         border-radius:50%; 
         object-fit:cover; 
-        /* Borde del logo más elegante (anillo blanco fuerte) */
         border:5px solid rgba(255,255,255,1);
         box-shadow: 0 0 10px rgba(0,0,0,0.5);
     ">
     <div style="display:flex; flex-direction:column; justify-content:center;">
         <p style="
             margin:2px 0; 
-            font-size:36px; 
+            font-size:32px; 
             font-weight:700; 
             line-height:1.1; 
         ">REPORTE DE PRODUCCIÓN HIS - RED SAN PABLO</p>
         <p style="
             margin:2px 0; 
-            font-size:18px; 
+            font-size:16px; 
             font-weight:300; 
             line-height:1.1; 
             opacity:0.9;
@@ -301,51 +383,20 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+
 # ============================================================
 # ⏰ FECHA DE ACTUALIZACIÓN DEL ARCHIVO Y FUENTE
 # ============================================================
-
-# Mapeo manual para asegurar los meses en español
-meses_espanol = {
-    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
-    7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
-}
-
-@st.cache_data
-def obtener_fecha_modificacion(path="CONSOLIDADO.xlsx"):
-    """Obtiene la fecha y hora de la última modificación del archivo de datos con meses en español."""
-    try:
-        # Usamos os.path.getmtime para obtener el timestamp de la última modificación
-        timestamp = os.path.getmtime(path)
-        # Convertimos el timestamp a un objeto datetime
-        dt_object = datetime.fromtimestamp(timestamp)
-        
-        # Obtenemos las partes de la fecha
-        dia = dt_object.day
-        mes_num = dt_object.month
-        anio = dt_object.year
-        tiempo = dt_object.strftime("%H:%M") 
-        
-        # Usamos el mapeo en español
-        mes_nombre = meses_espanol.get(mes_num, "Mes Desconocido")
-        
-        # Formato: 15 de Noviembre de 2025 - 11:44 Hrs.
-        return f"{dia} de {mes_nombre} de {anio} - {tiempo} Hrs."
-        
-    except FileNotFoundError:
-        # Si el archivo no existe, mostramos la fecha/hora actual como un marcador
-        now = datetime.now()
-        mes_nombre = meses_espanol.get(now.month, "Mes Desconocido")
-        return f"{now.day} de {mes_nombre} de {now.year} - {now.strftime('%H:%M')} Hrs. (Archivo no encontrado)"
-
 fecha_actualizacion = obtener_fecha_modificacion()
 
 # 👉 Contenedor de Fecha y Fuente
+# Este bloque es el [data-testid="stVerticalBlock"]:nth-child(2)
 st.markdown(f"""
     <div style="
         display: flex;
         justify-content: space-between; 
         align-items: center;
+        margin-top: 0px; 
         margin-bottom: 5px; 
         padding: 5px 0;
         font-size: 16px;
@@ -362,61 +413,8 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 📥 CARGA DE DATOS (Manejo de errores si no existe el archivo)
-# ============================================================
-@st.cache_data
-def cargar_datos(path="CONSOLIDADO.xlsx"):
-    try:
-        # CORRECCIÓN: Cambiado "openypxl" a "openpyxl"
-        df = pd.read_excel(path, engine="openpyxl")
-        df.columns = df.columns.map(lambda c: str(c).strip())
-        df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
-        return df
-    except FileNotFoundError:
-        # Crea un DataFrame de ejemplo si el archivo no existe para que el código no falle completamente
-        st.warning(f"⚠️ **Advertencia:** Archivo de datos no encontrado. Usando datos de ejemplo.")
-        data = {
-            "anio": [2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024, 2024],
-            "mes": [10, 10, 10, 10, 10, 10, 10, 10, 11, 11],
-            "nombre_establecimiento": ["IPRESS A", "IPRESS B", "IPRESS A", "IPRESS C", "IPRESS B", "IPRESS A", "IPRESS B", "IPRESS C", "IPRESS A", "IPRESS B"],
-            "profesional": ["Cardiología", "Medicina General", "Cardiología", "Ginecología", "Pediatría", "Medicina Interna", "Oftalmología", "Cirugía", "Cardiología", "Medicina General"],
-            "nombres_profesional": ["Dr. Perez", "Lic. García", "Dr. Perez", "Dra. Lopez", "Dr. Soto", "Dra. Rojas", "Lic. Vidal", "Dr. Castro", "Dr. Perez", "Lic. García"],
-            "Total Atenciones": [150, 220, 180, 90, 300, 110, 250, 140, 160, 230],
-            "1": [10, 20, 15, 5, 25, 8, 18, 12, 11, 21],
-            "2": [12, 25, 18, 7, 30, 9, 20, 14, 13, 26],
-            "3": [14, 28, 20, 8, 35, 10, 22, 16, 15, 29],
-            "4": [10, 20, 15, 5, 25, 8, 18, 12, 11, 21],
-            "5": [12, 25, 18, 7, 30, 9, 20, 14, 13, 26],
-            "6": [14, 28, 20, 8, 35, 10, 22, 16, 15, 29]
-        }
-        # Añadir más columnas de días para el ejemplo
-        for i in range(7, 32):
-            data[str(i)] = [max(0, x - 2) for x in data[str(i-3)]] if i > 3 and str(i-3) in data else [0] * 10
-        return pd.DataFrame(data)
-
-def detectar_dias_columnas(columns):
-    return sorted([str(c) for c in columns if re.fullmatch(r"0?[1-9]|[12][0-9]|3[01]", str(c))], key=lambda x: int(x))
-
-df = cargar_datos()
-day_cols = detectar_dias_columnas(df.columns)
-
-# ============================================================
-# 📆 MAPA DE MESES
-# ============================================================
-# Se reutiliza el mapa meses_espanol definido arriba
-meses_map = meses_espanol
-
-if "mes" in df.columns:
-    df["mes_nombre"] = df["mes"].map(meses_map)
-    orden_meses = list(meses_map.values())
-    df["mes_nombre"] = pd.Categorical(df["mes_nombre"], categories=orden_meses, ordered=True)
-else:
-    orden_meses = []
-
-# ============================================================
 # 🔍 FILTROS (EXPANDER FIJO CON HOVER)
 # ============================================================
-# Mantenemos el expander con expanded=True y usamos CSS para ocultar el botón
 with st.expander("⚙️ **FILTROS DE BÚSQUEDA**", expanded=True):
     filtro_col1, filtro_col2, filtro_col3, filtro_col4, filtro_col5 = st.columns(5)
 
@@ -425,8 +423,6 @@ with st.expander("⚙️ **FILTROS DE BÚSQUEDA**", expanded=True):
         anios = ["Todos"] + anios_data
         
         default_year = "Todos"
-        
-        # Lógica para establecer el año por defecto (ejemplo 2025)
         if 2025 not in anios_data:
             if 2025 not in anios:
                  anios.append(2025)
@@ -463,7 +459,6 @@ with st.expander("⚙️ **FILTROS DE BÚSQUEDA**", expanded=True):
 # ============================================================
 # 🔢 PARÁMETROS 
 # ============================================================
-# ÚNICA LÍNEA SEPARADORA MANTENIDA AQUÍ
 st.markdown("---") 
 
 col_params_izq, col_params_der = st.columns([1, 1])
@@ -476,11 +471,10 @@ with col_params_izq:
 # ============================================================
 df_filtrado = df.copy()
 if filtro_anio != "Todos":
-    # Aseguramos la comparación de tipos
     try:
         df_filtrado = df_filtrado[df_filtrado["anio"] == int(filtro_anio)]
     except ValueError:
-        pass # Ignorar si 'Todos' o el valor no es convertible
+        pass 
 
 if filtro_mes != "Todos":
     df_filtrado = df_filtrado[df_filtrado["mes_nombre"] == filtro_mes]
@@ -489,7 +483,8 @@ if filtro_ipress != "Todos":
 if filtro_especialidad != "Todos":
     df_filtrado = df_filtrado[df_filtrado["profesional"] == filtro_especialidad]
 if filtro_profesional != "Todos":
-    df_filtrado = df_filtrado[df_filtrado["nombres_profesional"] == filtro_profesional]
+    df_filtrado = df_filtrado[df_filtrado[
+        "nombres_profesional"] == filtro_profesional]
 
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
@@ -524,7 +519,6 @@ resumen = resumen.rename(columns=rename_map)
 
 sort_col = "Atenciones"
 if "Atenciones" not in resumen.columns:
-    # Si no existe la columna Total Atenciones, usamos la suma de las columnas de días
     resumen["Suma_Dias"] = resumen[[c for c in day_cols if c in resumen.columns]].sum(axis=1)
     sort_col = "Suma_Dias"
 
@@ -538,7 +532,6 @@ st.header("Resultados por Profesional y Establecimiento")
 
 show_days_table = st.checkbox("📅 **Mostrar columnas de producción diaria**", value=False)
 
-# 👉 APLICACIÓN DEL DIVISOR ESTILIZADO 3 (debajo del checkbox)
 display_styled_divider()
 
 col_izq, col_der = st.columns([3, 2])
@@ -562,7 +555,6 @@ def highlight_alternate_rows(row):
 
 def format_numbers(val):
     try:
-        # Solo formatear si el valor es numérico y no nulo
         if isinstance(val, (int, float, pd.Int64Dtype)) and not pd.isna(val):
             return f"{int(val):,}"
     except:
@@ -576,22 +568,19 @@ with col_izq:
     
     st.subheader("📋 Tabla de Producción")
     
-    # Usamos la columna real que se usó para ordenar (Atenciones o Suma_Dias)
     display_att_col = "Atenciones" if "Atenciones" in resumen_top.columns else "Suma_Dias"
 
     base_cols = ["Profesional", "Especialidad", "Establecimiento", "Atendidos", display_att_col]
     display_cols = [c for c in base_cols if c in resumen_top.columns]
 
     if show_days_table:
-        # Solo se añaden las columnas de días si el checkbox está seleccionado (ahora por defecto es False)
         display_cols += [c for c in day_cols if c in resumen_top.columns]
 
     tabla_final = resumen_top[display_cols].copy()
     
-    # Renombrar Suma_Dias si existe para la vista final
     if "Suma_Dias" in tabla_final.columns:
         tabla_final = tabla_final.rename(columns={"Suma_Dias": "Atenciones"})
-        display_cols = [c.replace("Suma_Dias", "Atenciones") for c in display_cols] # Actualizar lista
+        display_cols = [c.replace("Suma_Dias", "Atenciones") for c in display_cols] 
 
     tabla_final = tabla_final.dropna(how='all') 
 
@@ -622,7 +611,7 @@ with col_izq:
         })
     )
 
-    st.dataframe(styled, use_container_width=True, height=520)
+    st.dataframe(styled, use_container_width=True, height=520) 
 
 # ============================================================
 # 📈 GRÁFICO (CON LÍNEA CONECTANDO BARRAS)
@@ -630,36 +619,32 @@ with col_izq:
 with col_der:
     st.subheader("📈 Producción de Atenciones (Top N)")
 
-    # Usamos la columna real que se usó para ordenar (Atenciones o Suma_Dias)
     att_column_name = "Atenciones" if "Atenciones" in resumen_top.columns else "Suma_Dias"
 
     if att_column_name in resumen_top.columns:
         
-        # 1. Gráfico de Barras (Base)
         bars = (
             alt.Chart(resumen_top)
             .mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5)
             .encode(
                 x=alt.X(f"{att_column_name}:Q", title="Total de Atenciones"),
-                y=alt.Y("Profesional:N", sort="-x"), # Mantener el orden del ranking
+                y=alt.Y("Profesional:N", sort="-x"),
                 color=alt.Color("Establecimiento:N", legend=alt.Legend(title="Establecimiento")),
                 tooltip=["Establecimiento", "Especialidad", "Profesional", "Atendidos", alt.Tooltip(att_column_name, title="Atenciones", format=',.0f')]
             )
         )
         
-        # 2. Línea de Tendencia (conectando los puntos de las barras)
         trend_line = (
             alt.Chart(resumen_top)
-            .mark_line(color='#E83E8C', strokeWidth=4) # Color fucsia fuerte
+            .mark_line(color='#E83E8C', strokeWidth=4)
             .encode(
                 x=alt.X(f"{att_column_name}:Q"),
-                y=alt.Y("Profesional:N", sort="-x"), # Mismo orden que las barras
-                order=alt.Order(f"{att_column_name}", sort="descending"), # Para asegurar el orden de los puntos
+                y=alt.Y("Profesional:N", sort="-x"),
+                order=alt.Order(f"{att_column_name}", sort="descending"), 
                 tooltip=["Establecimiento", "Especialidad", "Profesional", alt.Tooltip(att_column_name, title="Atenciones", format=',.0f')]
             )
         )
 
-        # 3. Puntos sobre la línea para mayor énfasis 
         points = (
             alt.Chart(resumen_top)
             .mark_point(filled=True, size=150, color='#C03070', stroke='white', strokeWidth=2)
@@ -671,7 +656,6 @@ with col_der:
             )
         )
         
-        # 4. Combinar Barras, Línea y Puntos
         final_chart = (bars + trend_line + points).properties(height=520)
         
         st.altair_chart(final_chart, use_container_width=True)
@@ -693,10 +677,8 @@ def get_daily_trend_data(df, day_cols):
     if not day_cols:
         return pd.DataFrame()
 
-    # Columnas de identificación que deben conservarse (aunque se agruparán)
     id_vars = [c for c in ["anio", "mes_nombre", "nombre_establecimiento", "profesional", "nombres_profesional"] if c in df.columns]
     
-    # 1. Melt/Pivotear las columnas de días a filas
     df_melted = df.melt(
         id_vars=id_vars,
         value_vars=day_cols,
@@ -704,13 +686,10 @@ def get_daily_trend_data(df, day_cols):
         value_name="Atenciones_Diarias"
     )
     
-    # Asegurar que 'Día' sea numérico para el eje X
     df_melted["Día"] = pd.to_numeric(df_melted["Día"], errors='coerce').dropna().astype(int)
     
-    # 2. Sumar las atenciones diarias por 'Día'
     df_daily_trend = df_melted.groupby("Día", as_index=False)["Atenciones_Diarias"].sum()
     
-    # Asegurar que no haya nulos y ordenar
     df_daily_trend = df_daily_trend.dropna(subset=["Atenciones_Diarias"])
     df_daily_trend = df_daily_trend.sort_values(by="Día")
     
@@ -720,14 +699,12 @@ df_tendencia = get_daily_trend_data(df_filtrado, day_cols)
 
 if not df_tendencia.empty:
     
-    # Definimos el color amarillo fuerte/dorado para la línea y los puntos
-    COLOR_AMARILLO_FUERTE = '#FFD700' # Amarillo/Dorado
-    COLOR_TEXTO_OSCURO = '#555555'  # Gris oscuro para contraste
+    COLOR_AMARILLO_FUERTE = '#FFD700'
+    COLOR_TEXTO_OSCURO = '#555555' 
 
-    # 1. Gráfico de Tendencia (Línea)
     chart_tendencia = (
         alt.Chart(df_tendencia)
-        .mark_line(point=True, color=COLOR_AMARILLO_FUERTE, strokeWidth=4) # Color AMARILLO
+        .mark_line(point=True, color=COLOR_AMARILLO_FUERTE, strokeWidth=4)
         .encode(
             x=alt.X("Día:O", title="Días del Mes", axis=alt.Axis(labelAngle=0)),
             y=alt.Y("Atenciones_Diarias:Q", title="Total de Atenciones"),
@@ -740,19 +717,17 @@ if not df_tendencia.empty:
         ).interactive()
     )
     
-    # 2. Añadir Texto a los Puntos (etiquetas de valor)
     text = chart_tendencia.mark_text(
         align='center',
         baseline='bottom',
-        dy=-8 # Desplazamiento vertical del texto
+        dy=-8 
     ).encode(
         text=alt.Text("Atenciones_Diarias:Q", format=',.0f'),
-        color=alt.value(COLOR_TEXTO_OSCURO) # Color del texto para mejor contraste
+        color=alt.value(COLOR_TEXTO_OSCURO) 
     )
 
     st.altair_chart(chart_tendencia + text, use_container_width=True)
     
-    # Agregar un gráfico de barras simple debajo para reforzar la visualización
     st.caption("Gráfico de barras de Atenciones Diarias")
     chart_barras = (
         alt.Chart(df_tendencia)
@@ -774,11 +749,9 @@ else:
 # ============================================================
 # 🔢 MÉTRICAS FINALES
 # ============================================================
-# 👉 DIVISOR SIMPLE REVERTIDO (antes de las métricas)
 st.markdown("---")
 
 total_atendidos = resumen["Atendidos"].sum() if "Atendidos" in resumen.columns else 0
-# Usamos la columna de Atenciones o Suma_Dias para el total de Atenciones
 sort_col_name = "Atenciones" if "Atenciones" in resumen.columns else "Suma_Dias"
 total_atenciones = resumen[sort_col_name].sum() if sort_col_name in resumen.columns else 0
 
@@ -795,6 +768,7 @@ st.markdown("""
         Elaborado por **César Malca Cabanillas** - Red San Pablo 2025.
     </div>
 """, unsafe_allow_html=True)
+
 
 
 
