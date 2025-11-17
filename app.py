@@ -595,7 +595,7 @@ with col_izq:
 # 📈 GRÁFICO (CON LÍNEA CONECTANDO BARRAS)
 # ============================================================
 with col_der:
-    st.subheader("📈 Producción de Atenciones (Top N)")
+    st.subheader("📈 Producción de Atenciones")
 
     att_column_name = "Atenciones" if "Atenciones" in resumen_top.columns else "Suma_Dias"
 
@@ -748,6 +748,7 @@ st.markdown("""
         Elaborado por **César Malca Cabanillas** - Red San Pablo 2025.
     </div>
 """, unsafe_allow_html=True)
+
 
 
 
