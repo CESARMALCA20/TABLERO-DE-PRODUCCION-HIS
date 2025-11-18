@@ -5,6 +5,7 @@ import re
 import base64
 from pathlib import Path
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import os 
 import streamlit.components.v1 as components 
 
@@ -58,7 +59,8 @@ def obtener_fecha_modificacion(path="CONSOLIDADO.xlsx"):
     """Obtiene la fecha y hora de la última modificación del archivo de datos con meses en español."""
     try:
         timestamp = os.path.getmtime(path)
-        dt_object = datetime.fromtimestamp(timestamp)
+        # Interpretar timestamp como UTC y convertir a hora de Perú (America/Lima)
+        dt_object = datetime.fromtimestamp(timestamp, tz=ZoneInfo("UTC")).astimezone(ZoneInfo("America/Lima"))
         
         dia = dt_object.day
         mes_num = dt_object.month
@@ -70,7 +72,7 @@ def obtener_fecha_modificacion(path="CONSOLIDADO.xlsx"):
         return f"{dia} de {mes_nombre} de {anio} - {tiempo} Hrs."
         
     except FileNotFoundError:
-        now = datetime.now()
+        now = datetime.now(ZoneInfo("America/Lima"))
         mes_nombre = meses_espanol.get(now.month, "Mes Desconocido")
         return f"{now.day} de {mes_nombre} de {now.year} - {now.strftime('%H:%M')} Hrs. (Archivo no encontrado)"
 
@@ -137,7 +139,7 @@ if "mes" in df.columns:
 
 
 # ============================================================
-# 🎨 ESTILOS CSS PROFESIONALES (Globales, no de la tabla)
+# 🎨 ESTILOS CSS PROFESIONALES (GLOBALes, no de la tabla)
 # ============================================================
 st.markdown("""
 <style>
@@ -927,6 +929,7 @@ st.markdown("""
     © 2025 Red San Pablo | Elaborado por: Área de Informática y Estadística.
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
