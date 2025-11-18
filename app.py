@@ -43,7 +43,7 @@ else:
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Tablero HIS - Red San Pablo", 
+    page_title="Red San Pablo - Producción HIS", 
     page_icon=logo_src,  
     layout="wide"
 )
@@ -760,7 +760,7 @@ with col_izq:
         scrolling=False 
     )
     
-    st.caption("Nota: La tabla ha sido renderizada con HTML puro. El encabezado de la tabla ahora está fijo al hacer scroll dentro del panel.")
+    st.caption("")
 
 # ============================================================
 # 📈 GRÁFICO (CON LÍNEA CONECTANDO BARRAS)
@@ -768,7 +768,7 @@ with col_izq:
 with col_der:
     
     # 🎯 SUBTÍTULO CON MARGENES REDUCIDOS PARA ALINEACIÓN VERTICAL
-    st.markdown('<h3 style="margin-top: 5px; margin-bottom: 5px;">📈 Producción de Atenciones (Top N)</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top: 5px; margin-bottom: 5px;">📈 Producción de Atenciones</h3>', unsafe_allow_html=True)
 
     # Usamos la columna en minúsculas/título para el gráfico, ya que Altair lo maneja mejor
     att_column_name_chart = "Atenciones" if "Atenciones" in resumen_top.columns else "Suma_Dias"
@@ -929,8 +929,6 @@ st.markdown("""
     © 2025 Red San Pablo | Elaborado por: Área de Informática y Estadística.
 </div>
 """, unsafe_allow_html=True)
-
-
 
 
 
