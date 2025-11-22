@@ -545,6 +545,15 @@ if not group_cols:
 else:
     resumen = df_filtrado.groupby(group_cols, as_index=False).agg(agg_dict)
 
+# 🔥 Ajuste: asegurar suma correcta de Total Atenciones por profesional
+if "Total Atenciones" in df_filtrado.columns and group_cols:
+    # Calcula la suma real por grupo
+    suma_att = df_filtrado.groupby(group_cols, as_index=False)["Total Atenciones"].sum().rename(columns={"Total Atenciones":"Total Atenciones_sum"})
+    # Merge para asegurar que el resumen tenga la suma por grupo (evita problemas de filas múltiples)
+    resumen = resumen.merge(suma_att, on=group_cols, how="left")
+    resumen["Total Atenciones"] = resumen["Total Atenciones_sum"]
+    resumen = resumen.drop(columns=["Total Atenciones_sum"])
+
 # 🛑 Aplicación del cambio: "profesional" ahora se etiqueta como "Profesión"
 rename_map = {
     "nombre_establecimiento": "Establecimiento",
@@ -929,6 +938,8 @@ st.markdown("""
     © 2025 Red San Pablo | Elaborado por: Área de Informática y Estadística.
 </div>
 """, unsafe_allow_html=True)
+
+
 
 
 
