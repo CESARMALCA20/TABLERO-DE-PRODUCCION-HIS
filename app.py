@@ -355,8 +355,6 @@ div[data-testid*="stSelectbox"] {
     color: white !important;
     font-weight: bold;
 }
-/* ------------------------------------------------- */
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -530,6 +528,7 @@ if df_filtrado.empty:
 # ============================================================
 # 📊 AGRUPACIÓN Y RESÚMENES
 # ============================================================
+# <-- CAMBIO IMPORTANTE: USAR "Total Atenciones" COMO FUENTE -->
 att_col = "Total Atenciones" if "Total Atenciones" in df_filtrado.columns else None
 att_serv_total_col = "atendidos_servicios_total" if "atendidos_servicios_total" in df_filtrado.columns else None
 
@@ -545,14 +544,18 @@ if not group_cols:
 else:
     resumen = df_filtrado.groupby(group_cols, as_index=False).agg(agg_dict)
 
-# 🔥 Ajuste: asegurar suma correcta de Total Atenciones por profesional
+# 🔥 Ajuste: asegurar suma correcta de "Total Atenciones" por profesional si existe
 if "Total Atenciones" in df_filtrado.columns and group_cols:
     # Calcula la suma real por grupo
-    suma_att = df_filtrado.groupby(group_cols, as_index=False)["Total Atenciones"].sum().rename(columns={"Total Atenciones":"Total Atenciones_sum"})
+    suma_att = (
+        df_filtrado.groupby(group_cols, as_index=False)["Total Atenciones"]
+        .sum()
+        .rename(columns={"Total Atenciones":"Total_Atenciones_sum"})
+    )
     # Merge para asegurar que el resumen tenga la suma por grupo (evita problemas de filas múltiples)
     resumen = resumen.merge(suma_att, on=group_cols, how="left")
-    resumen["Total Atenciones"] = resumen["Total Atenciones_sum"]
-    resumen = resumen.drop(columns=["Total Atenciones_sum"])
+    resumen["Total Atenciones"] = resumen["Total_Atenciones_sum"]
+    resumen = resumen.drop(columns=["Total_Atenciones_sum"])
 
 # 🛑 Aplicación del cambio: "profesional" ahora se etiqueta como "Profesión"
 rename_map = {
@@ -560,6 +563,7 @@ rename_map = {
     "profesional": "Profesión",     
     "nombres_profesional": "Profesional",
     "atendidos_servicios_total": "Atendidos",
+    # <-- CAMBIO: ahora mapeamos la columna nueva a "Atenciones" -->
     "Total Atenciones": "Atenciones"
 }
 resumen = resumen.rename(columns=rename_map)
