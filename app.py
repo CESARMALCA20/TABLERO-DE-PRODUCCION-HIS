@@ -8,6 +8,13 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import os 
 import streamlit.components.v1 as components 
+from io import BytesIO 
+from reportlab.lib.pagesizes import A4, landscape 
+from reportlab.lib.units import inch 
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image 
+from reportlab.lib import colors 
+from reportlab.lib.styles import getSampleStyleSheet 
+
 
 # ============================================================
 #  CONFIGURACIÓN GENERAL Y CARGA DE LOGO
@@ -39,7 +46,7 @@ if logo_b64:
     logo_src = f"data:image/png;base64,{logo_b64}"
 else:
     # Placeholder de emergencia si el archivo de logo no se encuentra
-    logo_src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUAAABgCAYAAADg1PWnAAAAAXNSR0IArs4c6QAAAXRJREFUeJzt3LFOwzAUBeFvE4kFioK3oV24cAE8A4P0JcQf4AQ8AW8gY2CgICAgICAgICAgICAg+K1c/70lSZIe3D5/l9f/FwAAAACA1V9n39X607Pfb9/Nn5e3b97b1+f7fUe630z9A4H5f+gDAvP/UC+Yn7c/k5e3v0D2H0j9A4H5f6iFm3y7O/t7/R/c4D/vF/v7jVdD/g/1vF/i9p8H4v+hF25x9+Xl7b+w0lP89o3v9/uOdv9z9e4/vF/s73cO/w+7cIu7vy/n1/f3n6Tif/D5eXn/m/9n7d1/tC4tF078Hl8vL+/8XzG4y92Xl7f/gZ/t2r93/jV19uL29vs3n/f7jnb9L4/G/2f9H7duf7w/f79/b9/e77P9G/f2f9+8BBAAAAICrF16Y66yTfG/vAAAAAElFTkSuQmCC" 
+    logo_src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAXRJREFUeJzt3LFOwzAUBeFvE4kFioK3oV24cAE8A4P0JcQf4AQ8AW8gY2CgICAgICAgICAgICAg+K1c/70lSZIe3D5/l9f/FwAAAACA1V9n39X607Pfb9/Nn5e3b97b1+f7fUe630z9A4H5f+gDAvP/UC+Yn7c/k5e3v0D2H0j9A4H5f6iFm3y7O/t7/R/c4D/vF/v7jVdD/g/1vF/i9p8H4v+hF25x9+Xl7b+w0lP89o3v9/uOdv9z9e4/vF/s73cO/w+7cIu7vy/n1/f3n6Tif/D5eXn/m/9n7d1/tC4tF078Hl8vL+/8XzG4y92Xl7f/gZ/t2r93/jV19uL29vs3n/f7jnb9L4/G/2f9H7duf7w/f79/b9/e77P9G/f2f9+8BBAAAAICrF16Y66yTfG/vAAAAAElFTkSuQmCC" 
 
 # Configuración de la página
 st.set_page_config(
@@ -98,9 +105,9 @@ def cargar_datos(path="CONSOLIDADO.xlsx"):
             "atendidos_servicios_total": [120, 180, 140, 70, 250, 90, 200, 100, 130, 190],
         }
         
-        # Inicializar columnas de días (1 a 31)
+        # Inicializar columnas de días (1.1 a 31.1)
         for i in range(1, 32):
-            data[str(i)] = [max(1, (10 + j * 2) - abs(i - 15)) for j in range(10)] # Valores base ficticios
+            data[f"{i}.1"] = [max(1, (10 + j * 2) - abs(i - 15)) for j in range(10)] # Valores base ficticios
              
         # Crear filas adicionales para simular más de 100 profesionales
         num_initial_rows = len(data["anio"])
@@ -118,7 +125,7 @@ def cargar_datos(path="CONSOLIDADO.xlsx"):
             data["atendidos_servicios_total"].append(90 + idx * 4)
             
             for j in range(1, 32):
-                data[str(j)].append(max(0, 5 + (idx % 10) + (j % 5)))
+                data[f"{j}.1"].append(max(0, 5 + (idx % 10) + (j % 5)))
 
         # Se usa dict comprehension para combinar listas.
         combined_data = {key: data[key] for key in data}
@@ -126,7 +133,268 @@ def cargar_datos(path="CONSOLIDADO.xlsx"):
         return pd.DataFrame(combined_data)
 
 def detectar_dias_columnas(columns):
-    return sorted([str(c) for c in columns if re.fullmatch(r"0?[1-9]|[12][0-9]|3[01]", str(c))], key=lambda x: int(x))
+    """Detecta columnas de días en formato '1.1', '2.1', ..., '31.1'"""
+    # Patrón para detectar números del 1 al 31 seguidos de .1
+    return sorted([str(c) for c in columns if re.fullmatch(r"(0?[1-9]|[12][0-9]|3[01])\.1", str(c))], 
+                  key=lambda x: int(x.split('.')[0]))
+
+def renombrar_columnas_dias(df):
+    """Renombra las columnas de días de formato '1.1' a solo '1' para mostrar en la tabla"""
+    rename_dict = {}
+    for col in df.columns:
+        if re.fullmatch(r"(0?[1-9]|[12][0-9]|3[01])\.1", str(col)):
+            # Extraer solo el número antes del punto
+            nuevo_nombre = col.split('.')[0]
+            rename_dict[col] = nuevo_nombre
+    return df.rename(columns=rename_dict)
+
+# ============================================================
+#  FUNCIÓN DE GENERACIÓN DE PDF (CORREGIDA)
+# ============================================================
+
+def crear_pdf_profesional(df_tabla, filtros, logo_data):
+    """
+    Genera un reporte PDF profesional de la tabla de producción usando ReportLab.
+    
+    CORRECCIÓN: Se ajustan los anchos de columna dinámicamente, forzando un ancho 
+    mínimo para las columnas de días para que la tabla no se descuadre en A4 horizontal.
+    """
+    buffer = BytesIO()
+    # Usar A4 en orientación horizontal para tablas grandes
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
+                            leftMargin=0.5*inch, rightMargin=0.5*inch,
+                            topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    styles = getSampleStyleSheet()
+    story = []
+
+    # --- TÍTULO PRINCIPAL Y LOGO ---
+    
+    # 1. Logo (si está disponible)
+    img = None
+    if logo_data:
+        # Reposicionar el puntero del BytesIO si se va a usar
+        logo_data.seek(0)
+        try:
+            # Crear Image desde BytesIO
+            img = Image(logo_data, width=0.75*inch, height=0.75*inch)
+        except Exception:
+            img = None
+    
+    # 2. Título basado en filtros
+    filtro_mes = filtros.get("Mes", "Todos")
+    filtro_ipress = filtros.get("Establecimiento", "Todas las IPRESS")
+    
+    titulo_texto = f"REPORTE GENERAL DE PRODUCCIÓN HIS"
+    subtitulo_texto = f"PERÍODO: {filtro_mes} | ESTABLECIMIENTO: {filtro_ipress} | AÑO: {filtros.get('Año', 'Todos')}"
+    
+    
+    # Estilos de títulos
+    style_h1 = styles['h1']
+    style_h1.alignment = 1 # Centro
+    style_h1.textColor = colors.HexColor('#003c8f') # Azul oscuro
+    style_h1.fontName = 'Helvetica-Bold'
+    style_h1.fontSize = 18
+    
+    style_sub = styles['h3']
+    style_sub.alignment = 1 # Centro
+    style_sub.textColor = colors.HexColor('#555555') 
+    style_sub.fontName = 'Helvetica'
+    style_sub.fontSize = 12
+
+    # Construir el encabezado con logo y texto (usando una tabla de 2 columnas)
+    titulo_main = Paragraph(titulo_texto, style_h1)
+    titulo_sub = Paragraph(subtitulo_texto, style_sub)
+    
+    # Crea una tabla para alinear el logo y el texto
+    ancho_pagina = landscape(A4)[0]
+    ancho_disponible = ancho_pagina - 1.0 * inch # Márgenes de 0.5" a cada lado
+
+    if img:
+        # Usamos una estructura de 2x2 para alinear el logo y el texto en el centro
+        header_data = [[img, titulo_main], ['', titulo_sub]]
+        # Ancho total: ~10.0 pulgadas. Logo: 1 pulgada, Texto: 9.0 pulgadas.
+        col_widths_header = [1.0 * inch, ancho_disponible - 1.0 * inch] 
+    else:
+        header_data = [[titulo_main], [titulo_sub]]
+        col_widths_header = [ancho_disponible]
+
+    header_table = Table(header_data, colWidths=col_widths_header)
+    
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    
+    story.append(header_table)
+    story.append(Spacer(1, 0.25*inch))
+    
+    # --- TABLA DE DATOS ---
+    
+    # Preparar datos para ReportLab
+    # df_tabla debe tener las columnas que se quieren mostrar
+    
+    # 1. Renombrar columnas de días en el DataFrame para el PDF
+    df_temp = df_tabla.copy()
+    
+    # Renombrar columnas de días de formato '1.1' a '1' para el PDF
+    for col in df_temp.columns:
+        if re.fullmatch(r"(0?[1-9]|[12][0-9]|3[01])\.1", str(col)):
+            nuevo_nombre = col.split('.')[0]
+            df_temp = df_temp.rename(columns={col: nuevo_nombre})
+    
+    # 2. Añadir columna ITEM (Index + 1)
+    df_temp = df_temp.reset_index().rename(columns={'index': 'ITEM'}).copy()
+    df_temp['ITEM'] = df_temp.index + 1
+    
+    # Reordenar para que ITEM sea la primera columna
+    cols_order = ['ITEM'] + [col for col in df_temp.columns if col != 'ITEM']
+    df_temp = df_temp[cols_order]
+
+    # Convertir a lista de listas para ReportLab
+    data = [df_temp.columns.tolist()] + df_temp.values.tolist()
+    
+    # 3. Convertir números a strings con formato de miles
+    for i in range(1, len(data)):
+        for j in range(len(data[i])):
+            val = data[i][j]
+            try:
+                # Asumiendo que las columnas numéricas relevantes son enteros (días, atendidos, atenciones)
+                if isinstance(val, (int, float)) and not pd.isna(val): 
+                    data[i][j] = f"{int(val):,}"
+                elif pd.isna(val):
+                    data[i][j] = ""
+            except:
+                pass
+
+    # Crear objeto Table
+    # Ancho total disponible (usando el mismo que para el encabezado)
+    table_width = ancho_disponible 
+
+    # Número total de columnas
+    num_cols = len(data[0]) 
+    
+    # Crear lista de anchos de columna dinámicamente
+    col_widths = []
+    
+    # Definir el número de columnas fijas de identificación (ITEM, Prof, Profesion, Estab, Atendidos, Atenciones)
+    NUM_FIXED_COLS = 6
+    
+    if num_cols >= NUM_FIXED_COLS:
+        # Anchos fijos optimizados para A4 paisaje (suman 5.7 pulgadas)
+        col_widths_fixed = [
+            0.3 * inch,  # ITEM
+            1.7 * inch,  # Profesional (REDUCIDO)
+            1.2 * inch,  # Profesión 
+            1.2 * inch,  # Establecimiento
+            0.7 * inch,  # Atendidos
+            0.6 * inch   # Atenciones
+        ]
+        col_widths.extend(col_widths_fixed)
+        
+        # Calcular ancho restante
+        remaining_width = table_width - sum(col_widths)
+        num_day_cols = num_cols - NUM_FIXED_COLS - 1  # Restar 1 para la columna TOTAL
+        
+        if num_day_cols > 0:
+            # Ancho mínimo para columnas de días (0.15 pulgadas = 10.8 puntos)
+            day_width_min = 0.15 * inch 
+            
+            # Usar el ancho mínimo si el espacio lo permite, sino dividir el espacio restante.
+            if num_day_cols * day_width_min > remaining_width:
+                 # Caso extremo: dividir el espacio restante entre las columnas de días
+                 day_width_final = remaining_width / num_day_cols
+            else:
+                 # Caso normal: usar el ancho mínimo para que las columnas de día sean estrechas
+                 day_width_final = day_width_min
+
+            # Asegurar que el ancho de la columna de día no sea negativo (si remaining_width fuera negativo)
+            if day_width_final < 0:
+                 day_width_final = 0.1 * inch
+
+            col_widths.extend([day_width_final] * num_day_cols)
+            
+        # Agregar ancho para la columna TOTAL (más ancha que las columnas de días)
+        col_widths.append(0.5 * inch)  # Columna TOTAL más ancha
+
+    # Crear la tabla
+    if not col_widths: 
+        return None
+        
+    # El ancho de la tabla será la suma de los anchos de columna calculados
+    pdf_table = Table(data, colWidths=col_widths)
+
+    # Definir estilos de tabla
+    style = TableStyle([
+        # Headers
+        ('BACKGROUND', (0, 0), (-2, 0), colors.HexColor('#003c8f')), # Azul oscuro para todas excepto TOTAL
+        ('TEXTCOLOR', (0, 0), (-2, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-2, 0), 6), # Reducir tamaño de fuente en headers
+        ('FONTSIZE', (-1, 0), (-1, 0), 7), # Tamaño de fuente más grande para TOTAL header
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+        
+        # Body
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-2, -1), 5), # AÚN MÁS REDUCIDO: 5 puntos para las filas de datos
+        ('FONTSIZE', (-1, 1), (-1, -1), 6), # Tamaño de fuente más grande para datos de TOTAL
+        ('ALIGN', (0, 1), (0, -1), 'CENTER'), # ITEM (Index)
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'), # PROFESIONAL
+        ('ALIGN', (2, 1), (-1, -1), 'CENTER'), # El resto
+        ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
+        
+        # Columna de totales (ATENDIDOS y ATENCIONES) - Índices 4 y 5
+        ('BACKGROUND', (4, 1), (5, -1), colors.HexColor('#d4edda')), # Verde claro
+        ('TEXTCOLOR', (4, 1), (5, -1), colors.HexColor('#155724')), # Verde oscuro
+        ('FONTNAME', (4, 1), (5, -1), 'Helvetica-Bold'),
+        
+        # Columna TOTAL - aplicar un estilo especial
+        ('BACKGROUND', (-1, 0), (-1, 0), colors.HexColor('#ffc107')), # Amarillo para header de TOTAL
+        ('TEXTCOLOR', (-1, 0), (-1, 0), colors.HexColor('#856404')), # Marrón oscuro para texto
+        ('FONTNAME', (-1, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BACKGROUND', (-1, 1), (-1, -1), colors.HexColor('#fff3cd')), # Amarillo claro para datos de TOTAL
+        ('TEXTCOLOR', (-1, 1), (-1, -1), colors.HexColor('#856404')), # Marrón oscuro para texto
+        ('FONTNAME', (-1, 1), (-1, -1), 'Helvetica-Bold'),
+    ])
+    
+    # --- FILAS RAYADAS ---
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style.add('BACKGROUND', (0, i), (-2, i), colors.HexColor('#eef6ff')) # Excluir columna TOTAL
+
+    pdf_table.setStyle(style)
+    story.append(pdf_table)
+    
+    # --- FOOTER ---
+    story.append(Spacer(1, 0.25*inch))
+    fecha_reporte = datetime.now(ZoneInfo("America/Lima")).strftime("%d/%m/%Y %H:%M:%S")
+    footer_text = f"Generado el: {fecha_reporte} (Perú). | Fuente de Datos: HISMINSA. | Este reporte incluye {len(df_tabla)} profesionales."
+    
+    style_footer = styles['Normal']
+    style_footer.alignment = 1 # Centro
+    style_footer.textColor = colors.HexColor('#6c757d')
+    style_footer.fontSize = 8
+    
+    story.append(Paragraph(footer_text, style_footer))
+    
+    # --- CONSTRUIR DOCUMENTO ---
+    try:
+        doc.build(story)
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        st.error(f"Error al generar el PDF: {e}")
+        return None
+
 
 df = cargar_datos()
 day_cols = detectar_dias_columnas(df.columns)
@@ -532,7 +800,7 @@ if df_filtrado.empty:
 #  AGRUPACIÓN Y RESÚMENES
 # ============================================================
 # <-- CAMBIO IMPORTANTE: AHORA USAMOS 'total.1' COMO FUENTE DE ATENCIONES -->
-att_col = "total.1" if "total.1" in df_filtrado.columns else None # CAMBIO A 'total.1'
+att_col = "total.1" if "total.1" in df_filtrado.columns else None 
 att_serv_total_col = "atendidos_servicios_total" if "atendidos_servicios_total" in df_filtrado.columns else None
 
 group_cols = [c for c in ["nombre_establecimiento", "profesional", "nombres_profesional"] if c in df_filtrado.columns]
@@ -547,27 +815,27 @@ if not group_cols:
 else:
     resumen = df_filtrado.groupby(group_cols, as_index=False).agg(agg_dict)
 
-#  Ajuste: asegurar suma correcta de "total.1" por profesional si existe
+# Ajuste: asegurar suma correcta de "total.1" por profesional si existe
 if "total.1" in df_filtrado.columns and group_cols:
     # Calcula la suma real por grupo
     suma_att = (
         df_filtrado.groupby(group_cols, as_index=False)["total.1"]
         .sum()
-        .rename(columns={"total.1":"Total_Atenciones_sum"}) # CAMBIO A 'total.1'
+        .rename(columns={"total.1":"Total_Atenciones_sum"}) 
     )
     # Merge para asegurar que el resumen tenga la suma por grupo (evita problemas de filas múltiples)
     resumen = resumen.merge(suma_att, on=group_cols, how="left")
-    resumen["total.1"] = resumen["Total_Atenciones_sum"] # CAMBIO A 'total.1'
+    resumen["total.1"] = resumen["Total_Atenciones_sum"] 
     resumen = resumen.drop(columns=["Total_Atenciones_sum"])
 
-#  Aplicación del cambio: "profesional" ahora se etiqueta como "Profesión"
+# Aplicación del cambio: "profesional" ahora se etiqueta como "Profesión"
 rename_map = {
     "nombre_establecimiento": "Establecimiento",
     "profesional": "Profesión",     
     "nombres_profesional": "Profesional",
     "atendidos_servicios_total": "Atendidos",
     # <-- CAMBIO: ahora mapeamos la columna 'total.1' a "Atenciones" -->
-    "total.1": "Atenciones" # CAMBIO DE "Total Atenciones" A "total.1"
+    "total.1": "Atenciones" 
 }
 resumen = resumen.rename(columns=rename_map)
 
@@ -576,17 +844,129 @@ if "Atenciones" not in resumen.columns:
     resumen["Suma_Dias"] = resumen[[c for c in day_cols if c in resumen.columns]].sum(axis=1)
     sort_col = "Suma_Dias"
 
+# AGREGAR COLUMNA TOTAL DESPUÉS DE LOS DÍAS
+# Primero, asegurarnos de que las columnas de días estén al final
+column_order = []
+for col in resumen.columns:
+    if col not in day_cols:
+        column_order.append(col)
+        
+# Agregar las columnas de días
+for col in day_cols:
+    if col in resumen.columns:
+        column_order.append(col)
+
+# Reordenar el DataFrame
+resumen = resumen[column_order]
+
+# AGREGAR LA COLUMNA TOTAL QUE SUMA TODAS LAS COLUMNAS DE DÍAS
+# Obtener solo las columnas numéricas de días
+dias_numericos = [col for col in day_cols if col in resumen.columns]
+if dias_numericos:
+    resumen['TOTAL'] = resumen[dias_numericos].sum(axis=1)
+
 resumen = resumen.sort_values(by=sort_col, ascending=False).reset_index(drop=True)
 
 # Aquí limitamos el ranking al Top N, aunque el resumen completo tiene >100
 resumen_top = resumen.head(top_n).copy() 
 
 # ============================================================
-#  TABLA +  GRÁFICO PRINCIPAL
+#  INICIO DE LÓGICA DE PDF Y TABLA PRINCIPAL
 # ============================================================
+
 st.header("Resultados por Profesional y Establecimiento")
 
-show_days_table = st.checkbox(" **Mostrar columnas de producción diaria**", value=False)
+# ------------------------------------------------------------
+# 1. LÓGICA DE GENERACIÓN DE PDF (Movida al inicio de la tabla)
+# ------------------------------------------------------------
+
+# Obtener el logo binario para el PDF (si está disponible)
+logo_file_path = "logo_sanpablo.png"
+logo_data = None
+try:
+    base_path = Path(__file__).parent
+    logo_path = base_path / logo_file_path
+    with open(logo_path, "rb") as f:
+        logo_data = BytesIO(f.read())
+except Exception:
+    pass
+
+# Prepara el DataFrame final para el PDF (usa el resumen completo)
+df_for_pdf = resumen.copy() # 'resumen' tiene todos los datos filtrados, ordenados
+
+# Renombrar columnas de días en el DataFrame para el PDF (de 1.1 a 1, etc.)
+df_for_pdf_pdf = df_for_pdf.copy()
+for col in df_for_pdf_pdf.columns:
+    if re.fullmatch(r"(0?[1-9]|[12][0-9]|3[01])\.1", str(col)):
+        nuevo_nombre = col.split('.')[0]
+        df_for_pdf_pdf = df_for_pdf_pdf.rename(columns={col: nuevo_nombre})
+
+# Columnas a incluir en el PDF: principales, días
+pdf_cols_base = ["Profesional", "Profesión", "Establecimiento", "Atendidos", "Atenciones"]
+# Usar el nombre interno correcto para "Atenciones" si fue re-etiquetada
+if "Suma_Dias" in df_for_pdf_pdf.columns and "Atenciones" not in df_for_pdf_pdf.columns:
+     pdf_cols_base[-1] = "Suma_Dias"
+
+# Obtener columnas de días renombradas (sin .1)
+dias_renombrados_pdf = []
+for col in day_cols:
+    if col in df_for_pdf_pdf.columns:
+        dias_renombrados_pdf.append(col.split('.')[0])
+    elif col.split('.')[0] in df_for_pdf_pdf.columns:
+        dias_renombrados_pdf.append(col.split('.')[0])
+
+pdf_cols = [c for c in pdf_cols_base if c in df_for_pdf_pdf.columns] + [c for c in dias_renombrados_pdf if c in df_for_pdf_pdf.columns]
+# Agregar la columna TOTAL al final
+if 'TOTAL' in df_for_pdf_pdf.columns:
+    pdf_cols.append('TOTAL')
+
+df_pdf_final = df_for_pdf_pdf[pdf_cols]
+
+# Renombrar 'Suma_Dias' de vuelta a 'Atenciones' si fue usado
+if 'Suma_Dias' in df_pdf_final.columns:
+    df_pdf_final = df_pdf_final.rename(columns={'Suma_Dias': 'Atenciones'})
+
+# Filtros aplicados para el nombre del archivo
+filtros_aplicados = {
+    "Mes": filtro_mes,
+    "Establecimiento": filtro_ipress,
+    "Año": filtro_anio
+}
+
+# Llamar a la función que genera el PDF (con el DataFrame completo y la data del logo)
+pdf_buffer = crear_pdf_profesional(df_pdf_final, filtros_aplicados, logo_data)
+
+
+# ------------------------------------------------------------
+# 2. CHECKBOX Y BOTÓN DE DESCARGA (Lado a lado)
+# ------------------------------------------------------------
+
+# Crear columnas para alinear el checkbox y el botón
+col_check, col_button, col_spacer = st.columns([0.45, 0.35, 0.2])
+
+with col_check:
+    # Checkbox para mostrar/ocultar las columnas de días
+    show_days_table = st.checkbox(" **Mostrar columnas de producción diaria**", value=False)
+    
+with col_button:
+    # Botón de descarga de PDF
+    if pdf_buffer:
+        # Nombre del archivo basado en los filtros aplicados (incluyendo la corrección del año)
+        mes_pdf = filtros_aplicados["Mes"].replace(" ", "_")
+        ipress_pdf = filtros_aplicados["Establecimiento"].replace(" ", "_")
+        anio_pdf = str(filtros_aplicados["Año"])
+        filename = f"Reporte_Produccion_{ipress_pdf}_{mes_pdf}_{anio_pdf}.pdf"
+        
+        # El st.download_button ahora se renderiza aquí
+        st.download_button(
+            label=" ⬇️ Descargar PDF Completo",
+            data=pdf_buffer,
+            file_name=filename,
+            mime="application/pdf",
+            type="primary"
+        )
+    else:
+        st.error("No se pudo generar el PDF.")
 
 display_styled_divider()
 
@@ -619,10 +999,23 @@ with col_izq:
     display_cols = [c for c in base_cols if c in resumen_top.columns]
 
     if show_days_table:
-        display_cols += [c for c in day_cols if c in resumen_top.columns]
+        # Usar la función renombrar_columnas_dias para mostrar solo números
+        resumen_top_renombrado = renombrar_columnas_dias(resumen_top)
+        # Obtener las columnas de días ya renombradas (solo números)
+        dias_renombrados = [col.split('.')[0] for col in day_cols]
+        # Filtrar solo las columnas que existen en el DataFrame renombrado
+        dias_existentes = [c for c in dias_renombrados if c in resumen_top_renombrado.columns]
+        display_cols += dias_existentes
+        
+        # Agregar la columna TOTAL al final (si existe)
+        if 'TOTAL' in resumen_top_renombrado.columns:
+            display_cols.append('TOTAL')
+    else:
+        # Si no se muestran los días, usar el resumen original sin días
+        resumen_top_renombrado = resumen_top.copy()
 
-    # Usamos resumen_top (Top N) para la visualización, ya que el slider lo controla
-    tabla_final = resumen_top[display_cols].copy()
+    # Usamos resumen_top_renombrado para la visualización
+    tabla_final = resumen_top_renombrado[display_cols].copy()
     
     #  Forzar MAYÚSCULAS en los nombres de columna 
     tabla_final.columns = [col.upper() for col in tabla_final.columns]
@@ -691,6 +1084,13 @@ with col_izq:
             vertical-align: middle;
         }
         
+        /* Estilo especial para la columna TOTAL en el encabezado */
+        .dataframe thead th:last-child {
+            background-color: #ffc107 !important; /* Amarillo más fuerte para el header */
+            color: #856404 !important;
+            font-weight: bold !important;
+        }
+        
         /* Oculta la fila vacía que a veces genera Pandas en la cabecera */
         .dataframe thead tr:nth-child(2) {
             display: none;
@@ -743,6 +1143,14 @@ with col_izq:
             background-color: #d4edda;
             font-weight: bold;
             color: #155724;
+        }
+        
+        /* Estilo especial para la columna TOTAL */
+        .dataframe tbody tr td:last-child {
+            background-color: #fff3cd !important; /* Amarillo claro */
+            font-weight: bold !important;
+            color: #856404 !important; /* Marrón oscuro */
+            font-size: 14px !important;
         }
         
         /* CORRECCIÓN: Asegura la opacidad y el orden de apilamiento para toda la fila.
@@ -857,7 +1265,8 @@ def get_daily_trend_data(df, day_cols):
         value_name="Atenciones_Diarias"
     )
     
-    df_melted["Día"] = pd.to_numeric(df_melted["Día"], errors='coerce').dropna().astype(int)
+    # Extraer solo el número del día (antes del punto)
+    df_melted["Día"] = pd.to_numeric(df_melted["Día"].str.split('.').str[0], errors='coerce').dropna().astype(int)
     
     df_daily_trend = df_melted.groupby("Día", as_index=False)["Atenciones_Diarias"].sum()
     
@@ -915,7 +1324,7 @@ if not df_tendencia.empty:
     st.altair_chart(chart_barras, use_container_width=True)
 
 else:
-    st.info("No hay suficientes datos de producción diaria (columnas '1' a '31') para generar el gráfico de tendencia.")
+    st.info("No hay suficientes datos de producción diaria (columnas '1.1' a '31.1') para generar el gráfico de tendencia.")
     
 # ============================================================
 #  MÉTRICAS FINALES
@@ -926,11 +1335,19 @@ total_atendidos = resumen["Atendidos"].sum() if "Atendidos" in resumen.columns e
 sort_col_name = "Atenciones" if "Atenciones" in resumen.columns else "Suma_Dias"
 total_atenciones = resumen[sort_col_name].sum() if sort_col_name in resumen.columns else 0
 
+# Calcular total de la columna TOTAL si existe
+if 'TOTAL' in resumen.columns:
+    total_diario = resumen['TOTAL'].sum()
+else:
+    total_diario = 0
+
 
 # Se apilan en móvil
-m1, m2 = st.columns(2)
+m1, m2, m3 = st.columns(3)
 m1.metric(" Total Atendidos", f"{total_atendidos:,.0f}") 
 m2.metric(" Total Atenciones Registradas", f"{total_atenciones:,.0f}")
+if show_days_table:
+    m3.metric(" Total Producción Diaria", f"{total_diario:,.0f}")
 
 # ============================================================
 #  FOOTER / COPYRIGHT
@@ -948,18 +1365,3 @@ st.markdown("""
     © 2025 Red San Pablo | Elaborado por: Área de Informática y Estadística.
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
